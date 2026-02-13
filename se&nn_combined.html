@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TSP Battle Arena: Ultimate Edition</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --panel-color: #2d2d2d;
+            --sidebar-color: #252526;
+            --text-color: #e0e0e0;
+            --accent-color: #4a90e2; /* Blue */
+            --current-color: #ff9100; /* Orange/Amber */
+            --success-color: #00e676; /* Green */
+            --reject-color: #ff5252; /* Red */
+            --final-color: #2979ff; /* Deep Blue */
+            --node-color: #ffffff;
+            --bar-bg: #3e3e42;
+            --axis-color: #888888; /* Lightened for visibility */
+            --grid-color: #333333;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            display: flex;
+            height: 100vh;
+        }
+
+        /* --- LEFT CONTROLS --- */
+        #controls {
+            width: 280px;
+            background-color: var(--panel-color);
+            padding: 20px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 20;
+            flex-shrink: 0;
+        }
+
+        h2 { margin: 0 0 5px 0; font-size: 1.1rem; color: var(--accent-color); letter-spacing: 0.5px; }
+        .subtitle { font-size: 0.75rem; color: #888; margin-bottom: 5px; }
+        
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+        label { font-size: 0.85rem; color: #aaa; display: flex; justify-content: space-between; }
+        input[type="range"] { width: 100%; cursor: pointer; }
+        
+        /* MODE SWITCHER */
+        .mode-switch {
+            display: flex;
+            background: #111;
+            border-radius: 6px;
+            padding: 4px;
+            margin-bottom: 5px;
+        }
+        .mode-opt {
+            flex: 1;
+            text-align: center;
+            padding: 6px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            color: #666;
+            transition: all 0.3s;
+        }
+        .mode-opt.active {
+            background: var(--accent-color);
+            color: #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .btn-group { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px; }
+        button {
+            flex: 1 1 45%; 
+            padding: 8px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        button:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+        button:active:not(:disabled) { transform: translateY(0); }
+        button:disabled { cursor: not-allowed; opacity: 0.5; filter: grayscale(100%); transform: none; }
+        
+        #btn-gen { background-color: #555; }
+        #btn-reset { background-color: #7f8c8d; }
+        #btn-random-start { background-color: #673ab7; flex: 1 1 100%; margin-bottom: 5px; } 
+        #btn-start { background-color: var(--accent-color); flex: 1 1 100%; font-size: 1rem; padding: 10px; }
+        #btn-pause { background-color: #f39c12; }
+        #btn-pause.resuming { background-color: #27ae60; }
+
+        /* --- LEGEND BOX (Dynamic) --- */
+        .legend-box {
+            margin-top: auto; 
+            margin-bottom: 10px;
+            padding: 10px;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid #444;
+            border-radius: 4px;
+        }
+        .legend-title { font-size: 0.7rem; color: #888; text-transform: uppercase; margin-bottom: 8px; font-weight: bold; }
+        .legend-grid { display: grid; grid-template-columns: 1fr; gap: 6px; font-size: 0.75rem; }
+        .legend-grid.double { grid-template-columns: 1fr 1fr; }
+        .legend-item { display: flex; align-items: center; color: #aaa; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; display: inline-block; }
+        
+        /* NN Specific Colors */
+        .dot.current { background-color: var(--current-color); box-shadow: 0 0 4px var(--current-color); }
+        .dot.scanning { background-color: #ffff00; border: 1px dashed #666; }
+        .dot.path { background-color: var(--success-color); }
+        .dot.return { background-color: var(--reject-color); }
+        .dot.selected-start { border: 2px solid #fff; background: transparent; box-sizing: border-box; }
+        
+        /* SE Specific Colors */
+        .dot.checking { background-color: #ffff00; box-shadow: 0 0 4px #ffff00; }
+        .dot.accepted { background-color: var(--success-color); }
+        .dot.rejected { background-color: var(--reject-color); }
+        .dot.final { background-color: var(--final-color); box-shadow: 0 0 4px var(--final-color); }
+
+        /* --- MAIN AREA --- */
+        #main-area {
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #canvas-wrapper {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+        svg { width: 100%; height: 100%; display: block; }
+
+        /* --- RIGHT SIDEBAR --- */
+        #right-panel {
+            width: 250px; 
+            background-color: var(--sidebar-color);
+            border-left: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            z-index: 15;
+            transition: width 0.3s;
+        }
+        
+        .panel-header {
+            padding: 10px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            background: #333;
+            color: #ddd;
+            border-bottom: 1px solid #444;
+            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .panel-badge { font-size: 0.7rem; padding: 2px 6px; border-radius: 3px; background: #555; }
+
+        #list-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            scrollbar-width: thin;
+            scrollbar-color: #555 #222;
+        }
+
+        /* NN LIST ITEMS */
+        .path-item {
+            display: flex; align-items: center; height: 28px; font-size: 11px; color: #ccc;
+            position: relative; padding: 0 5px; opacity: 0; font-family: 'Consolas', monospace; 
+            background: rgba(255,255,255,0.03); border-radius: 3px; margin-bottom: 2px;
+        }
+        .path-item.visible { animation: slideIn 0.3s forwards; }
+        .path-step { width: 25px; color: #666; font-weight: bold; }
+        .path-nodes { flex: 1; color: var(--accent-color); font-weight: bold; display: flex; align-items: center; gap: 5px; }
+        .path-dist { color: #aaa; font-weight: normal; }
+        .arrow-icon { font-size: 10px; color: #666; }
+        .path-item.active { border-left: 2px solid var(--current-color); background: rgba(255, 145, 0, 0.1); }
+        .path-item.return-trip { border-left: 2px solid var(--reject-color); opacity: 0.8; }
+
+        /* SE LIST ITEMS */
+        .edge-item {
+            display: flex; align-items: center; height: 20px; font-size: 11px; color: #ccc;
+            position: relative; padding-right: 5px; opacity: 0; font-family: 'Consolas', monospace; 
+        }
+        .edge-item.visible { animation: slideIn 0.3s forwards; }
+        .edge-pair { width: 35px; text-align: left; padding-left: 5px; color: #666; font-weight: bold; flex-shrink: 0; }
+        .edge-info { width: 55px; text-align: right; margin-right: 6px; color: #aaa; flex-shrink: 0; white-space: nowrap; }
+        .bar-bg {
+            flex: 1; height: 75%; background: rgba(255,255,255,0.05); position: relative;
+            margin-left: 0; border-radius: 2px; overflow: hidden; display: flex; align-items: center;
+        }
+        .bar-fill { height: 100%; background-color: var(--bar-bg); width: 0%; transition: background-color 0.2s; position: absolute; top: 0; left: 0; z-index: 1; }
+        .reject-reason { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 9px; color: var(--reject-color); z-index: 2; opacity: 0.9; display: none; font-weight: bold; }
+        
+        .edge-item.active .bar-fill { background-color: #ffff00; }
+        .edge-item.active .edge-pair { color: #fff; }
+        .edge-item.accepted .bar-fill { background-color: var(--success-color); }
+        .edge-item.accepted .edge-info { color: var(--success-color); }
+        .edge-item.rejected .bar-fill { background-color: var(--reject-color); opacity: 0.3; }
+        .edge-item.rejected .edge-info { color: #888; text-decoration: line-through; opacity: 0.5; } 
+        .edge-item.rejected .reject-reason { display: block; } 
+        .edge-item.final .bar-fill { background-color: var(--final-color); }
+
+        @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+        /* --- SVG ELEMENTS --- */
+        .axis-line { stroke: var(--axis-color); stroke-width: 2px; }
+        .axis-tick { stroke: var(--axis-color); stroke-width: 1px; }
+        .axis-text { fill: var(--axis-color); font-size: 10px; font-family: 'Consolas', monospace; user-select: none; }
+        .grid-line { stroke: var(--grid-color); stroke-width: 1px; stroke-dasharray: 4,4; }
+
+        .node-group { cursor: pointer; } 
+        .node-group:hover .node-circle { transform: scale(1.3); stroke: #fff; stroke-width: 3px; }
+        body.running .node-group { cursor: default; pointer-events: none; }
+
+        .node-circle { 
+            fill: var(--node-color); stroke: var(--bg-color); stroke-width: 2px; 
+            transition: fill 0.3s, stroke 0.3s, transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            z-index: 10; transform-origin: center; transform-box: fill-box;
+        }
+        .node-text { fill: var(--bg-color); font-size: 11px; font-weight: bold; text-anchor: middle; dominant-baseline: central; pointer-events: none; user-select: none; z-index: 11; }
+        
+        /* Node States */
+        .node-circle.current { fill: var(--current-color); stroke: #fff; stroke-width: 3px; }
+        .node-circle.visited { fill: var(--success-color); }
+        .node-circle.start { fill: var(--accent-color); }
+        .node-circle.selected-start { stroke: #fff; stroke-width: 2px; fill: var(--accent-color); stroke-dasharray: 3, 2; animation: spin-dash 4s linear infinite; }
+        
+        /* Edges */
+        .edge { stroke-linecap: round; fill: none; transition: stroke 0.3s, opacity 0.3s; }
+        
+        /* NN Edge Styles */
+        .edge.nn-scan { stroke: #ffff00; stroke-width: 1px; stroke-dasharray: 4,4; opacity: 0.6; }
+        .edge.nn-path { stroke: var(--success-color); stroke-width: 3px; }
+        .edge.nn-return { stroke: var(--reject-color); stroke-width: 2px; stroke-dasharray: 8,4; }
+        
+        /* SE Edge Styles */
+        .edge.se-scan { stroke: #666; stroke-width: 1px; stroke-dasharray: 5,5; opacity: 0.5; }
+        .edge.se-checking { stroke: #ffff00; stroke-width: 2px; stroke-dasharray: 6,4; opacity: 0.9; }
+        .edge.se-rejected { stroke: var(--reject-color); stroke-width: 3px; opacity: 0.6; }
+        .edge.se-accepted { stroke: var(--success-color); stroke-width: 4px; z-index: 5; }
+        
+        .edge.final { stroke: var(--final-color); stroke-width: 4px; box-shadow: 0 0 10px var(--final-color); }
+
+        /* --- HUD (Standard & Hero) --- */
+        #hud-panel {
+            position: absolute; top: 20px; right: 20px; width: 260px;
+            background: rgba(15, 15, 15, 0.95); border: 1px solid #444; border-left: 4px solid var(--accent-color);
+            padding: 15px; border-radius: 6px; font-family: 'Consolas', monospace; z-index: 50;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+            transition: all 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+            display: flex; flex-direction: column; gap: 5px; cursor: move; user-select: none; 
+        }
+        #hud-panel:active { cursor: grabbing; transition: none; }
+
+        .hud-row-sm { font-size: 0.8rem; color: #aaa; display: flex; justify-content: space-between; align-items: center; height: 20px; }
+        .hud-row-lg { font-size: 1.3rem; font-weight: 800; text-transform: uppercase; color: #fff; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+        .hud-row-xs { font-size: 0.75rem; color: #666; border-top: 1px solid #333; padding-top: 8px; display: flex; justify-content: space-between; }
+
+        /* Hero Mode */
+        #hud-panel.hero-mode {
+            width: 380px; border: 2px solid var(--final-color); border-left: 10px solid var(--final-color);
+            background: rgba(10, 15, 30, 0.98); box-shadow: 0 0 60px rgba(41, 121, 255, 0.5);
+            z-index: 100; cursor: default;
+            align-items: center; justify-content: center; padding: 30px 20px; gap: 10px;
+        }
+
+        .hud-hero-title { font-size: 0.85rem; color: #888; text-transform: uppercase; letter-spacing: 3px; font-weight: bold; margin: 0; }
+        .hud-hero-value { font-size: 3.5rem; font-weight: 900; color: var(--final-color); text-shadow: 0 0 30px rgba(41, 121, 255, 0.8); line-height: 0.9; margin: 5px 0 0 0; }
+        .hud-hero-sub { font-size: 1rem; color: #fff; background: var(--final-color); padding: 8px 0; width: 90%; text-align: center; font-weight: bold; border-radius: 4px; letter-spacing: 2px; margin: 0; }
+        .hud-hero-stats { font-size: 0.9rem; color: #ccc; text-align: center; font-family: 'Consolas', monospace; opacity: 0.8; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 10px; margin-top: 5px; width: 100%; }
+
+        /* Comparison Section in Hero */
+        .comparison-box {
+            width: 100%; margin-top: 10px; background: rgba(255,255,255,0.05); border-radius: 4px; padding: 10px;
+            display: flex; flex-direction: column; gap: 5px;
+        }
+        .comp-header { font-size: 0.7rem; color: #aaa; text-transform: uppercase; text-align: center; letter-spacing: 1px; border-bottom: 1px solid #444; padding-bottom: 3px; margin-bottom: 3px; }
+        .comp-row { display: flex; justify-content: space-between; font-size: 0.85rem; color: #ddd; font-family: 'Consolas', monospace; }
+        .comp-val { font-weight: bold; }
+        .comp-winner { color: var(--success-color); }
+        .comp-loser { color: var(--reject-color); }
+
+        .hud-hero-action {
+            margin-top: 10px; padding: 8px 20px; background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3); color: #fff; border-radius: 20px;
+            cursor: pointer; font-size: 0.8rem; font-weight: bold; text-transform: uppercase;
+            letter-spacing: 1px; transition: all 0.2s; pointer-events: auto; 
+        }
+        .hud-hero-action:hover { background: rgba(255, 255, 255, 0.2); border-color: #fff; transform: translateY(-2px); }
+
+        /* Status Colors */
+        #hud-panel.status-scanning { border-left-color: var(--current-color); } /* NN Scan */
+        #hud-panel.status-analyzing { border-left-color: #ffff00; } /* SE Scan */
+        #hud-panel.status-moving { border-left-color: var(--success-color); } /* NN Move */
+        #hud-panel.status-accepted { border-left-color: var(--success-color); } /* SE Accept */
+        #hud-panel.status-rejected { border-left-color: var(--reject-color); } /* SE Reject */
+
+        /* --- Layers --- */
+        #confetti-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 45; }
+        #flying-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; overflow: hidden; }
+        #onsite-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 40; overflow: hidden; }
+
+        .flying-particle {
+            position: absolute; width: 8px; height: 8px; background: var(--success-color); border-radius: 50%;
+            box-shadow: 0 0 8px var(--success-color); transform: translate(-50%, -50%);
+            transition: left 0.5s cubic-bezier(0.25, 0.1, 0.25, 1), top 0.5s cubic-bezier(0.25, 0.1, 0.25, 1), opacity 0.5s ease-in;
+        }
+
+        .onsite-label {
+            position: absolute; font-family: 'Segoe UI', sans-serif; font-weight: 800; font-size: 11px; text-transform: uppercase;
+            padding: 3px 6px; border-radius: 3px; color: #fff; white-space: nowrap; opacity: 0;
+            transform: translate(-50%, -50%) scale(0.8); transition: all 0.3s; text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+        }
+        .onsite-label.visible { opacity: 1; transform: translate(-50%, -180%) scale(1); }
+        .onsite-label.rejected { background: var(--reject-color); }
+        .onsite-label.accepted { background: var(--success-color); color: #000; text-shadow: none; }
+
+        /* Animations */
+        @keyframes pulse-node { 0% { transform: scale(1); } 50% { transform: scale(1.5); } 100% { transform: scale(1); } }
+        @keyframes spin-dash { 0% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 10; } }
+        @keyframes pulse-line { 0% { stroke-width: 4px; } 50% { stroke-width: 8px; } 100% { stroke-width: 4px; } }
+        @keyframes shake-line { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-2px); } 40%, 80% { transform: translateX(2px); } }
+        
+        .animate-jump { animation: pulse-node 0.4s ease-out; transform-box: fill-box; transform-origin: center; }
+        .edge.animate-pop { animation: pulse-line 0.4s ease-out; }
+        .edge.animate-reject { animation: shake-line 0.4s ease-in-out; }
+
+    </style>
+</head>
+<body>
+
+    <div id="controls">
+        <h2>Algorithm Arena</h2>
+        <div class="subtitle">NN vs SE Visualizer</div>
+        
+        <!-- MODE SWITCHER -->
+        <div class="mode-switch">
+            <div class="mode-opt active" id="mode-nn" onclick="switchMode('NN')">NN Nearest</div>
+            <div class="mode-opt" id="mode-se" onclick="switchMode('SE')">SE Greedy</div>
+        </div>
+
+        <div class="control-group">
+            <label for="node-count">Nodes: <span id="val-nodes">10</span></label>
+            <input type="range" id="node-count" min="4" max="25" value="10">
+        </div>
+
+        <div class="control-group">
+            <label for="speed">Speed: <span id="val-speed">Medium</span></label>
+            <input type="range" id="speed" min="1" max="100" value="50">
+        </div>
+
+        <div class="control-group" id="nn-controls">
+            <label>Start Node: <span id="val-start-node">Click on Map</span></label>
+            <button id="btn-random-start">🎲 Random Start</button>
+        </div>
+
+        <div class="btn-group">
+            <button id="btn-gen">Generate Map</button> 
+            <button id="btn-reset" disabled>Reset Current</button>
+            <button id="btn-start">Start Run</button>
+            <button id="btn-pause" disabled>Pause</button>
+        </div>
+
+        <!-- LEGEND SECTION (Dynamic content) -->
+        <div class="legend-box" id="legend-box">
+            <!-- Populated by JS -->
+        </div>
+    </div>
+
+    <div id="main-area">
+        <div id="canvas-wrapper">
+            <svg id="svg-canvas" xmlns="http://www.w3.org/2000/svg"></svg>
+            <canvas id="confetti-canvas"></canvas>
+            
+            <!-- HUD PANEL -->
+            <div id="hud-panel">
+                <div id="hud-std-content">
+                    <div class="hud-row-sm">
+                        <span id="hud-label-1">Current: --</span>
+                        <span id="hud-dist">0.00</span>
+                    </div>
+                    <div class="hud-row-lg" id="hud-status">READY</div>
+                    <div class="hud-row-xs">
+                        <span id="hud-label-2">Progress:</span>
+                        <span id="hud-progress">0 / --</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="onsite-layer"></div>
+        </div>
+        
+        <div id="right-panel">
+            <div class="panel-header">
+                <span id="panel-title">Path Sequence</span>
+                <span class="panel-badge" id="panel-mode-badge">NN</span>
+            </div>
+            <div id="list-container">
+                <div style="padding:20px; text-align:center; color:#666; font-size:0.8rem; font-family:'Consolas',monospace;">
+                    [WAITING]<br>Waiting for Start
+                </div>
+            </div>
+        </div>
+        
+        <div id="flying-layer"></div>
+    </div>
+
+<script>
+    // --- CONFETTI ENGINE (Shared) ---
+    const confettiCanvas = document.getElementById('confetti-canvas');
+    const ctx = confettiCanvas.getContext('2d');
+    let particles = [];
+    let animationId = null;
+
+    function resizeCanvas() {
+        const rect = confettiCanvas.parentElement.getBoundingClientRect();
+        confettiCanvas.width = rect.width;
+        confettiCanvas.height = rect.height;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    class Particle {
+        constructor(x, y, color) {
+            this.x = x; this.y = y;
+            const angle = Math.random() * Math.PI * 2;
+            const velocity = Math.random() * 15 + 8; 
+            this.vx = Math.cos(angle) * velocity;
+            this.vy = Math.sin(angle) * velocity;
+            this.gravity = 0.25; this.friction = 0.94; 
+            this.size = Math.random() * 6 + 3;
+            this.color = color; this.alpha = 1;
+            this.decay = Math.random() * 0.01 + 0.002; 
+        }
+        update() {
+            this.vx *= this.friction; this.vy *= this.friction; this.vy += this.gravity;
+            this.x += this.vx; this.y += this.vy; this.alpha -= this.decay;
+        }
+        draw() {
+            ctx.globalAlpha = this.alpha; ctx.fillStyle = this.color;
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+        }
+    }
+
+    function fireConfetti(rect) {
+        const startX = rect.left + rect.width / 2;
+        const startY = rect.top + rect.height / 2;
+        const wrapperRect = document.getElementById('canvas-wrapper').getBoundingClientRect();
+        const originX = startX - wrapperRect.left;
+        const originY = startY - wrapperRect.top;
+        const colors = ['#2979ff', '#00e676', '#ffff00', '#ff5252', '#00bcd4', '#e040fb'];
+        for (let i = 0; i < 400; i++) particles.push(new Particle(originX, originY, colors[Math.floor(Math.random() * colors.length)]));
+        if (!animationId) animateConfetti();
+    }
+
+    function animateConfetti() {
+        ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+        particles.forEach((p, index) => {
+            if (p.alpha <= 0) particles.splice(index, 1); else { p.update(); p.draw(); }
+        });
+        if (particles.length > 0) animationId = requestAnimationFrame(animateConfetti); else animationId = null;
+    }
+
+    // --- Global State & Variables ---
+    const svg = document.getElementById('svg-canvas');
+    const NS = "http://www.w3.org/2000/svg";
+    const hudPanel = document.getElementById('hud-panel');
+    const listContainer = document.getElementById('list-container');
+    const flyingLayer = document.getElementById('flying-layer');
+    const onsiteLayer = document.getElementById('onsite-layer');
+
+    // Controls
+    const btnGen = document.getElementById('btn-gen');
+    const btnStart = document.getElementById('btn-start');
+    const btnReset = document.getElementById('btn-reset');
+    const btnPause = document.getElementById('btn-pause');
+    const btnRandomStart = document.getElementById('btn-random-start');
+    const valStartNode = document.getElementById('val-start-node');
+
+    let CURRENT_MODE = 'NN'; // 'NN' or 'SE'
+    let NODE_COUNT = 10;
+    const NODE_RADIUS = 12;
+    const MIN_NODE_DIST = NODE_RADIUS * 3;
+    let ANIMATION_DELAY = 500;
+
+    // State
+    let isRunning = false;
+    let isPaused = false;
+    let stopSignal = false;
+    let isFinished = false;
+
+    // Data
+    let nodes = []; 
+    let edges = []; // All possible edges for SE
+    let startNodeIdx = 0; // Only for NN
+    
+    // Comparison History
+    // Stores the result of the LAST run for each algorithm on the CURRENT map
+    let battleStats = {
+        nn: { dist: null, steps: null, run: false },
+        se: { dist: null, steps: null, run: false },
+        mapId: 0 // Increment on generateMap
+    };
+
+    const AXIS_PADDING = { left: 50, bottom: 40, top: 20, right: 20 };
+
+    // --- Init ---
+    function init() {
+        updateSpeed();
+        generateMap();
+        makeDraggable(hudPanel); 
+        updateLegend();
+
+        document.getElementById('node-count').addEventListener('input', (e) => {
+            NODE_COUNT = parseInt(e.target.value);
+            document.getElementById('val-nodes').textContent = NODE_COUNT;
+            if(!isRunning) generateMap();
+        });
+
+        document.getElementById('speed').addEventListener('input', updateSpeed);
+        btnGen.addEventListener('click', () => { if(isRunning) stopSignal = true; generateMap(); });
+        btnReset.addEventListener('click', resetCalculation);
+        btnStart.addEventListener('click', () => { if (!isRunning) runCurrentMode(); });
+        btnPause.addEventListener('click', togglePause);
+        btnRandomStart.addEventListener('click', () => { if (!isRunning && CURRENT_MODE === 'NN') pickRandomStart(); });
+        
+        window.addEventListener('resize', () => { 
+            if(!isRunning && nodes.length === 0) generateMap(); 
+            resizeCanvas();
+        });
+    }
+
+    function switchMode(mode) {
+        if(isRunning) return; // Lock during run
+        CURRENT_MODE = mode;
+        
+        // UI Toggle
+        document.getElementById('mode-nn').className = mode === 'NN' ? 'mode-opt active' : 'mode-opt';
+        document.getElementById('mode-se').className = mode === 'SE' ? 'mode-opt active' : 'mode-opt';
+        
+        // Visibility
+        document.getElementById('nn-controls').style.display = mode === 'NN' ? 'flex' : 'none';
+        document.getElementById('panel-mode-badge').textContent = mode;
+        document.getElementById('panel-title').textContent = mode === 'NN' ? 'Path Sequence' : 'Edge Queue (Sorted)';
+        
+        // Reset Visuals (but keep map)
+        performReset();
+        updateLegend();
+    }
+
+    function updateLegend() {
+        const box = document.getElementById('legend-box');
+        if(CURRENT_MODE === 'NN') {
+            box.innerHTML = `
+                <div class="legend-title">NN Legend</div>
+                <div class="legend-grid">
+                    <div class="legend-item"><span class="dot selected-start"></span>Selected Start</div>
+                    <div class="legend-item"><span class="dot current"></span>Current Node</div>
+                    <div class="legend-item"><span class="dot scanning"></span>Scanning</div>
+                    <div class="legend-item"><span class="dot path"></span>Confirmed Path</div>
+                    <div class="legend-item"><span class="dot return"></span>Return Path</div>
+                </div>`;
+        } else {
+            box.innerHTML = `
+                <div class="legend-title">SE Legend</div>
+                <div class="legend-grid double">
+                    <div class="legend-item"><span class="dot checking"></span>Checking</div>
+                    <div class="legend-item"><span class="dot accepted"></span>Connected</div>
+                    <div class="legend-item"><span class="dot rejected"></span>Rejected</div>
+                    <div class="legend-item"><span class="dot final"></span>Cycle Complete</div>
+                </div>`;
+        }
+    }
+
+    function updateSpeed() {
+        const val = parseInt(document.getElementById('speed').value);
+        ANIMATION_DELAY = 1010 - (val * 10);
+        let label = val > 80 ? "Ultra Fast" : val > 60 ? "Fast" : val < 40 ? "Slow" : "Normal";
+        document.getElementById('val-speed').textContent = label;
+    }
+
+    function togglePause() {
+        isPaused = !isPaused;
+        btnPause.textContent = isPaused ? "Resume" : "Pause";
+        if(isPaused) btnPause.classList.add("resuming"); else btnPause.classList.remove("resuming");
+    }
+
+    function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+    // --- Data Structures ---
+    class UnionFind {
+        constructor(n) { this.parent = Array.from({length: n}, (_, i) => i); }
+        find(i) {
+            if (this.parent[i] === i) return i;
+            this.parent[i] = this.find(this.parent[i]);
+            return this.parent[i];
+        }
+        union(i, j) {
+            const rootI = this.find(i); const rootJ = this.find(j);
+            if (rootI !== rootJ) { this.parent[rootI] = rootJ; return true; }
+            return false;
+        }
+    }
+
+    // --- Map Generation (Enhanced Axes) ---
+    function drawAxes(width, height) {
+        const originX = AXIS_PADDING.left; 
+        const originY = height - AXIS_PADDING.bottom;
+        const maxX = width - AXIS_PADDING.right; 
+        const maxY = AXIS_PADDING.top;
+        
+        // Helper to create line
+        const makeLine = (x1, y1, x2, y2, cls) => {
+            const l = document.createElementNS(NS, "line");
+            l.setAttribute("x1", x1); l.setAttribute("y1", y1); 
+            l.setAttribute("x2", x2); l.setAttribute("y2", y2); 
+            l.setAttribute("class", cls);
+            return l;
+        };
+
+        // Helper to create text
+        const makeText = (x, y, content, anchor) => {
+            const t = document.createElementNS(NS, "text");
+            t.setAttribute("x", x); t.setAttribute("y", y);
+            t.setAttribute("class", "axis-text");
+            t.setAttribute("text-anchor", anchor);
+            t.textContent = content;
+            return t;
+        };
+
+        // Draw Main Axes
+        svg.appendChild(makeLine(originX, originY, maxX, originY, "axis-line")); // X Axis
+        svg.appendChild(makeLine(originX, originY, originX, maxY, "axis-line")); // Y Axis
+
+        // Draw X Ticks & Labels & Grid
+        for(let i=0; i < (maxX - originX); i+=100) {
+            const xPos = originX + i;
+            if(xPos > maxX) break;
+            
+            // Grid line
+            if(i > 0) {
+                const grid = makeLine(xPos, originY, xPos, maxY, "grid-line");
+                // Put grid lines at the bottom of the stack so they don't cover nodes
+                svg.insertBefore(grid, svg.firstChild); 
+            }
+            
+            // Tick
+            svg.appendChild(makeLine(xPos, originY, xPos, originY + 5, "axis-tick"));
+            
+            // Text
+            svg.appendChild(makeText(xPos, originY + 15, i, "middle"));
+        }
+
+        // Draw Y Ticks & Labels & Grid
+        for(let i=0; i < (originY - maxY); i+=100) {
+            const yPos = originY - i;
+            if(yPos < maxY) break;
+
+            // Grid line
+            if(i > 0) {
+                const grid = makeLine(originX, yPos, maxX, yPos, "grid-line");
+                svg.insertBefore(grid, svg.firstChild);
+            }
+
+            // Tick
+            svg.appendChild(makeLine(originX, yPos, originX - 5, yPos, "axis-tick"));
+            
+            // Text
+            svg.appendChild(makeText(originX - 8, yPos + 4, i, "end"));
+        }
+    }
+
+    function generateMap() {
+        resetHUDState();
+        battleStats = { nn: {dist:null}, se: {dist:null}, mapId: battleStats.mapId + 1 }; // Reset stats
+        svg.innerHTML = '';
+        listContainer.innerHTML = '<div style="padding:20px; text-align:center; color:#666; font-size:0.8rem; font-family:\'Consolas\',monospace;">[WAITING]<br>Waiting for Start</div>';
+        
+        nodes = [];
+        edges = [];
+        startNodeIdx = 0;
+        valStartNode.textContent = "0 (Default)";
+
+        const wrapper = document.getElementById('canvas-wrapper');
+        const width = wrapper.clientWidth; const height = wrapper.clientHeight;
+        drawAxes(width, height);
+
+        const safeXMin = AXIS_PADDING.left + NODE_RADIUS + 10;
+        const safeXMax = width - AXIS_PADDING.right - NODE_RADIUS - 10;
+        const safeYMin = AXIS_PADDING.top + NODE_RADIUS + 10;
+        const safeYMax = height - AXIS_PADDING.bottom - NODE_RADIUS - 10;
+
+        for(let i=0; i<NODE_COUNT; i++){
+            let attempts = 0; let x, y, tooClose;
+            do {
+                x = safeXMin + Math.random() * (safeXMax - safeXMin);
+                y = safeYMin + Math.random() * (safeYMax - safeYMin);
+                tooClose = false;
+                for (let existing of nodes) {
+                    if (Math.sqrt((x - existing.x)**2 + (y - existing.y)**2) < MIN_NODE_DIST) { tooClose = true; break; }
+                }
+                attempts++;
+            } while (tooClose && attempts < 100);
+
+            const group = document.createElementNS(NS, "g");
+            group.setAttribute("transform", `translate(${x}, ${y})`);
+            group.setAttribute("class", "node-group");
+            
+            // Interaction for NN Start Node
+            group.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if(!isRunning && !isFinished && CURRENT_MODE === 'NN') selectStartNode(i);
+            });
+            
+            const circle = document.createElementNS(NS, "circle");
+            circle.setAttribute("r", NODE_RADIUS);
+            circle.setAttribute("class", "node-circle");
+            circle.setAttribute("id", `node-${i}`);
+            
+            const text = document.createElementNS(NS, "text");
+            text.setAttribute("class", "node-text");
+            text.textContent = i;
+
+            group.appendChild(circle); group.appendChild(text); svg.appendChild(group);
+            nodes.push({ id: i, x, y, circle, text, degree: 0 });
+        }
+        
+        // Pre-calculate edges for SE
+        for (let i = 0; i < nodes.length; i++) {
+            for (let j = i + 1; j < nodes.length; j++) {
+                const dx = nodes[i].x - nodes[j].x; const dy = nodes[i].y - nodes[j].y;
+                edges.push({ u: i, v: j, dist: Math.sqrt(dx*dx + dy*dy) });
+            }
+        }
+
+        if(CURRENT_MODE === 'NN') selectStartNode(0);
+    }
+
+    // --- NN Logic ---
+    function selectStartNode(idx) {
+        nodes.forEach(n => n.circle.classList.remove('selected-start'));
+        startNodeIdx = idx;
+        nodes[idx].circle.classList.add('selected-start');
+        valStartNode.textContent = `Node ${idx}`;
+        triggerJump(nodes[idx].circle);
+    }
+
+    function pickRandomStart() {
+        selectStartNode(Math.floor(Math.random() * NODE_COUNT));
+    }
+
+    // --- Visual Aids ---
+    function makeDraggable(el) {
+        let isDragging = false; let startX, startY, initialLeft, initialTop;
+        el.addEventListener('mousedown', (e) => {
+            if (isFinished) return; // Locked in Hero mode
+            isDragging = true;
+            const rect = el.getBoundingClientRect(); const parentRect = el.offsetParent.getBoundingClientRect();
+            el.style.right = 'auto'; el.style.bottom = 'auto';
+            el.style.left = (rect.left - parentRect.left) + 'px'; el.style.top = (rect.top - parentRect.top) + 'px';
+            el.style.transform = 'none';
+            startX = e.clientX; startY = e.clientY;
+            initialLeft = parseFloat(el.style.left); initialTop = parseFloat(el.style.top);
+            el.style.cursor = 'grabbing';
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return; e.preventDefault();
+            const dx = e.clientX - startX; const dy = e.clientY - startY;
+            el.style.left = `${initialLeft + dx}px`; el.style.top = `${initialTop + dy}px`;
+        });
+        window.addEventListener('mouseup', () => { isDragging = false; if(!isFinished) el.style.cursor = 'move'; });
+    }
+
+    function createLine(u, v, type) {
+        const line = document.createElementNS(NS, "line");
+        line.setAttribute("x1", nodes[u].x); line.setAttribute("y1", nodes[u].y);
+        line.setAttribute("x2", nodes[v].x); line.setAttribute("y2", nodes[v].y);
+        line.setAttribute("class", `edge ${type}`);
+        const firstNodeGroup = svg.querySelector('g'); 
+        if (firstNodeGroup) svg.insertBefore(line, firstNodeGroup); else svg.appendChild(line);
+        return line;
+    }
+
+    function triggerJump(el) {
+        el.classList.remove("animate-jump"); void el.offsetWidth; el.classList.add("animate-jump");
+    }
+
+    function flyParticle(fromX, fromY, targetElement, color = '#fff') {
+        if(!targetElement) return;
+        const rect = targetElement.getBoundingClientRect();
+        const targetX = rect.left + 20; const targetY = rect.bottom - 20;
+        
+        const wrapperRect = document.getElementById('canvas-wrapper').getBoundingClientRect();
+        const startX = wrapperRect.left + fromX; const startY = wrapperRect.top + fromY;
+
+        const p = document.createElement('div');
+        p.className = 'flying-particle';
+        p.style.backgroundColor = color;
+        p.style.boxShadow = `0 0 8px ${color}`;
+        p.style.left = startX + 'px'; p.style.top = startY + 'px';
+        flyingLayer.appendChild(p);
+
+        requestAnimationFrame(() => {
+            p.style.left = targetX + 'px'; p.style.top = targetY + 'px'; p.style.opacity = '0';
+        });
+        setTimeout(() => p.remove(), 500);
+    }
+
+    // --- HUD Controls ---
+    function updateHUD(mainLabel, dist, status, progress, type) {
+        if (isFinished && type !== 'force') return;
+        
+        // Rebuild if needed
+        if (!document.getElementById('hud-std-content') && !isFinished) {
+            hudPanel.innerHTML = `
+                <div id="hud-std-content">
+                    <div class="hud-row-sm">
+                        <span id="hud-label-1">Current: --</span>
+                        <span id="hud-dist">0.00</span>
+                    </div>
+                    <div class="hud-row-lg" id="hud-status">READY</div>
+                    <div class="hud-row-xs">
+                        <span id="hud-label-2">Progress:</span>
+                        <span id="hud-progress">0 / --</span>
+                    </div>
+                </div>`;
+            hudPanel.className = ''; 
+        }
+        if(isFinished) return;
+
+        document.getElementById('hud-label-1').textContent = CURRENT_MODE === 'NN' ? `Node: ${mainLabel}` : `Edge: ${mainLabel}`;
+        document.getElementById('hud-dist').textContent = dist;
+        document.getElementById('hud-status').textContent = status;
+        document.getElementById('hud-progress').textContent = progress;
+        
+        hudPanel.className = '';
+        if(type) hudPanel.classList.add(`status-${type}`);
+    }
+
+    // --- Algorithm Entry ---
+    function runCurrentMode() {
+        if (CURRENT_MODE === 'NN') startNNAlgorithm();
+        else startSEAlgorithm();
+    }
+
+    // ==========================================
+    // ALGORITHM 1: Nearest Neighbor (NN)
+    // ==========================================
+    async function startNNAlgorithm() {
+        startRunSetup();
+        
+        let currentNodeIdx = startNodeIdx;
+        let visited = new Set([currentNodeIdx]);
+        let totalDistance = 0;
+        let totalSteps = 0;
+        let finalEdges = [];
+
+        nodes[currentNodeIdx].circle.classList.remove('selected-start');
+        nodes[currentNodeIdx].circle.classList.add('start', 'current');
+        triggerJump(nodes[currentNodeIdx].circle);
+
+        updateHUD(currentNodeIdx, "0.00", "STARTING", `Visited: 1/${NODE_COUNT}`, "moving");
+        await sleep(1000);
+
+        while (visited.size < NODE_COUNT) {
+            while(isPaused) { if(stopSignal) break; await sleep(100); } if(stopSignal) break;
+            totalSteps++;
+
+            let nearestDist = Infinity;
+            let nearestNodeIdx = -1;
+            let tempScanLines = [];
+
+            updateHUD(currentNodeIdx, "--", "SCANNING", `Visited: ${visited.size}/${NODE_COUNT}`, "scanning");
+            
+            // Draw Scan Lines
+            for (let i = 0; i < nodes.length; i++) {
+                if (!visited.has(i)) {
+                    const dist = Math.sqrt((nodes[currentNodeIdx].x - nodes[i].x)**2 + (nodes[currentNodeIdx].y - nodes[i].y)**2);
+                    tempScanLines.push(createLine(currentNodeIdx, i, "nn-scan"));
+                    if (dist < nearestDist) { nearestDist = dist; nearestNodeIdx = i; }
+                }
+            }
+
+            await sleep(ANIMATION_DELAY);
+            tempScanLines.forEach(l => l.remove());
+            if (stopSignal) break;
+
+            if (nearestNodeIdx !== -1) {
+                // Move
+                const edgeLine = createLine(currentNodeIdx, nearestNodeIdx, "nn-path");
+                finalEdges.push(edgeLine);
+                visited.add(nearestNodeIdx);
+                totalDistance += nearestDist;
+                
+                addNNListItem(currentNodeIdx, nearestNodeIdx, nearestDist);
+                flyParticle(nodes[nearestNodeIdx].x, nodes[nearestNodeIdx].y, listContainer, 'var(--accent-color)');
+
+                nodes[currentNodeIdx].circle.classList.remove('current');
+                nodes[currentNodeIdx].circle.classList.add('visited');
+                currentNodeIdx = nearestNodeIdx;
+                nodes[currentNodeIdx].circle.classList.add('current');
+                triggerJump(nodes[currentNodeIdx].circle);
+
+                updateHUD(currentNodeIdx, nearestDist.toFixed(2), "MOVING", `Visited: ${visited.size}/${NODE_COUNT}`, "moving");
+            }
+            await sleep(ANIMATION_DELAY);
+        }
+
+        // Return to Start
+        if (!stopSignal) {
+            updateHUD("RETURN", "--", "CLOSING LOOP", "Final Step", "scanning");
+            await sleep(500);
+            const returnDist = Math.sqrt((nodes[currentNodeIdx].x - nodes[startNodeIdx].x)**2 + (nodes[currentNodeIdx].y - nodes[startNodeIdx].y)**2);
+            finalEdges.push(createLine(currentNodeIdx, startNodeIdx, "nn-return"));
+            totalDistance += returnDist;
+            
+            addNNListItem(currentNodeIdx, startNodeIdx, returnDist, true);
+            nodes[currentNodeIdx].circle.classList.remove('current');
+            nodes[currentNodeIdx].circle.classList.add('visited');
+            
+            // Record Stats
+            battleStats.nn = { dist: totalDistance, steps: totalSteps, run: true };
+            finishState(totalDistance, totalSteps, finalEdges);
+        } else {
+            performReset();
+        }
+    }
+
+    function addNNListItem(from, to, dist, isReturn = false) {
+        const div = document.createElement('div');
+        div.className = `path-item ${isReturn ? 'return-trip' : ''}`;
+        div.innerHTML = `
+            <span class="path-step">${listContainer.children.length + 1}</span>
+            <span class="path-nodes">${from} <span class="arrow-icon">➜</span> ${to}</span>
+            <span class="path-dist">${dist.toFixed(2)}</span>
+        `;
+        listContainer.appendChild(div);
+        setTimeout(() => { div.classList.add('visible'); div.scrollIntoView({ behavior: "smooth", block: "end" }); }, 100);
+    }
+
+    // ==========================================
+    // ALGORITHM 2: Sorted Edges (SE) - RESTORED ANIMATIONS
+    // ==========================================
+    async function startSEAlgorithm() {
+        startRunSetup();
+        
+        const sortedEdges = [...edges].sort((a, b) => a.dist - b.dist);
+        const maxDist = sortedEdges[sortedEdges.length-1].dist;
+        
+        // --- PHASE 1: SCAN LINES ANIMATION ---
+        updateHUD("--", "0.00", "SCANNING...", "Phase 1: Computing", "analyzing");
+        const tempLines = await animateScanLines(sortedEdges);
+        if(stopSignal) { performReset(); return; }
+
+        // --- PHASE 2: FLY TO QUEUE ANIMATION ---
+        updateHUD("--", "0.00", "SORTING...", "Phase 2: Building Queue", "analyzing");
+        await animateFlyToQueue(tempLines, sortedEdges, maxDist);
+        if(stopSignal) { performReset(); return; }
+
+        updateHUD("--", "0.00", "STARTING", "Greedy Algo Begins", "analyzing");
+        await sleep(500);
+
+        const uf = new UnionFind(nodes.length);
+        let acceptedEdgesCount = 0;
+        let totalDistance = 0;
+        let totalSteps = 0;
+        let acceptedLines = [];
+        nodes.forEach(n => n.degree = 0); // Reset degrees
+
+        for (let i = 0; i < sortedEdges.length; i++) {
+            while(isPaused) { if(stopSignal) break; await sleep(100); } if (stopSignal) break;
+            if (acceptedEdgesCount === nodes.length) break;
+
+            totalSteps++;
+            const edge = sortedEdges[i];
+            const {u, v, dist} = edge;
+
+            const listItem = document.getElementById(`list-item-${i}`);
+            if(listItem) { listItem.classList.add('active'); listItem.scrollIntoView({ behavior: "smooth", block: "center" }); }
+
+            updateHUD(`${u}-${v}`, dist.toFixed(2), "ANALYZING...", `${acceptedEdgesCount}/${nodes.length} Connected`, "analyzing");
+            const currentLine = createLine(u, v, "se-checking");
+            await sleep(ANIMATION_DELAY); 
+
+            const degreeSafe = nodes[u].degree < 2 && nodes[v].degree < 2;
+            const rootU = uf.find(u); const rootV = uf.find(v);
+            const isCycle = (rootU === rootV);
+            
+            let canAccept = false;
+            let statusMsg = "";
+            let hudType = "";
+
+            if (!degreeSafe) { statusMsg = "DEGREE LIMIT"; hudType = "rejected"; } 
+            else if (isCycle && acceptedEdgesCount < nodes.length - 1) { statusMsg = "PREMATURE CYCLE"; hudType = "rejected"; } 
+            else { canAccept = true; statusMsg = "CONNECTED"; hudType = "accepted"; }
+
+            updateHUD(`${u}-${v}`, dist.toFixed(2), statusMsg, `${canAccept?acceptedEdgesCount+1:acceptedEdgesCount}/${nodes.length} Conn`, hudType);
+            showOnSiteLabel(u, v, statusMsg, hudType);
+
+            if (canAccept) {
+                currentLine.setAttribute("class", "edge se-accepted animate-pop");
+                acceptedLines.push(currentLine);
+                if(listItem) listItem.classList.add('accepted');
+                nodes[u].degree++; nodes[v].degree++;
+                uf.union(u, v);
+                acceptedEdgesCount++;
+                totalDistance += dist;
+                triggerJump(nodes[u].circle); triggerJump(nodes[v].circle);
+                flyParticle(nodes[u].x, nodes[u].y, listContainer, 'var(--success-color)');
+            } else {
+                currentLine.setAttribute("class", "edge se-rejected animate-reject");
+                if(listItem) {
+                    listItem.classList.add('rejected');
+                    listItem.querySelector('.reject-reason').textContent = statusMsg === "DEGREE LIMIT" ? "Degree Limit" : "Premature Cycle";
+                }
+            }
+
+            await sleep(ANIMATION_DELAY * 0.8);
+            if (!canAccept && !stopSignal) currentLine.remove();
+            if(listItem) listItem.classList.remove('active');
+        }
+
+        if(!stopSignal) {
+             // Record Stats
+            if(acceptedEdgesCount === nodes.length) {
+                battleStats.se = { dist: totalDistance, steps: totalSteps, run: true };
+                finishState(totalDistance, totalSteps, acceptedLines);
+            } else {
+                updateHUD("FAIL", "--", "NO SOLUTION", "Check Logic", "rejected");
+                btnStart.disabled = false; btnReset.disabled = false; isRunning = false;
+            }
+        } else {
+            performReset();
+        }
+    }
+
+    // --- SE ANIMATION HELPERS ---
+    async function animateScanLines(sortedEdges) {
+        const tempLines = [];
+        const limit = Math.min(sortedEdges.length, 120); 
+        
+        for(let i=0; i<limit; i++) {
+            const e = sortedEdges[i];
+            const line = document.createElementNS(NS, "line");
+            line.setAttribute("x1", nodes[e.u].x); line.setAttribute("y1", nodes[e.u].y);
+            line.setAttribute("x2", nodes[e.v].x); line.setAttribute("y2", nodes[e.v].y);
+            line.setAttribute("class", "edge se-scan");
+            
+            const length = e.dist;
+            line.style.strokeDasharray = length;
+            line.style.strokeDashoffset = length; 
+            line.style.transition = `stroke-dashoffset 0.8s ease-out`;
+
+            // Insert before first node-group to stay behind nodes
+            const firstNode = svg.querySelector('.node-group');
+            if(firstNode) svg.insertBefore(line, firstNode); else svg.appendChild(line);
+            
+            tempLines.push({ element: line, edgeData: e });
+        }
+
+        // Trigger animation
+        requestAnimationFrame(() => {
+            tempLines.forEach(item => { item.element.style.strokeDashoffset = '0'; });
+        });
+
+        await sleep(1000); 
+        return tempLines;
+    }
+
+    async function animateFlyToQueue(tempLines, sortedEdges, maxDist) {
+        listContainer.innerHTML = '';
+        
+        // Pre-create list items but hide them
+        const listItems = [];
+        for (let i = 0; i < sortedEdges.length; i++) {
+            const edge = sortedEdges[i];
+            const widthPct = (edge.dist / maxDist) * 100;
+            const div = document.createElement('div');
+            div.className = 'edge-item'; 
+            div.id = `list-item-${i}`;
+            div.innerHTML = `
+                <span class="edge-pair">${edge.u}-${edge.v}</span>
+                <span class="edge-info">${edge.dist.toFixed(2)}</span>
+                <div class="bar-bg">
+                    <div class="bar-fill" style="width: ${widthPct}%"></div>
+                    <span class="reject-reason"></span>
+                </div>
+            `;
+            listContainer.appendChild(div);
+            listItems.push(div);
+        }
+
+        const flyInterval = Math.max(10, 800 / tempLines.length);
+
+        for(let i=0; i<tempLines.length; i++) {
+            if(stopSignal) return;
+
+            const mapLine = tempLines[i].element;
+            const edge = tempLines[i].edgeData;
+            const listItem = listItems[i]; 
+
+            const uNode = nodes[edge.u];
+            const vNode = nodes[edge.v];
+            const midX = (uNode.x + vNode.x) / 2;
+            const midY = (uNode.y + vNode.y) / 2;
+            
+            const svgRect = svg.getBoundingClientRect();
+            const wrapperRect = document.getElementById('canvas-wrapper').getBoundingClientRect();
+            // Start coord relative to flying-layer (which matches canvas-wrapper)
+            const startX = svgRect.left + midX - wrapperRect.left;
+            const startY = svgRect.top + midY - wrapperRect.top;
+
+            const listRect = listContainer.getBoundingClientRect();
+            let targetX, targetY;
+            
+            // Calculate target position in list
+            if (i < 15) {
+                const itemRect = listItem.getBoundingClientRect();
+                targetX = itemRect.left - wrapperRect.left + 20;
+                targetY = itemRect.top - wrapperRect.top + itemRect.height/2;
+            } else {
+                targetX = listRect.left - wrapperRect.left + 20;
+                targetY = listRect.bottom - wrapperRect.top - 20; 
+            }
+
+            // Create flying particle
+            const p = document.createElement('div');
+            p.className = 'flying-particle';
+            p.style.backgroundColor = '#ffff00';
+            p.style.left = startX + 'px';
+            p.style.top = startY + 'px';
+            flyingLayer.appendChild(p);
+
+            requestAnimationFrame(() => {
+                p.style.left = targetX + 'px';
+                p.style.top = targetY + 'px';
+                p.style.opacity = '0'; 
+            });
+
+            setTimeout(() => {
+                listItem.classList.add('visible');
+                mapLine.style.opacity = '0'; 
+                p.remove(); 
+            }, 500); 
+
+            await sleep(flyInterval);
+        }
+        
+        await sleep(500);
+        tempLines.forEach(t => t.element.remove());
+        
+        // Show remaining items if any
+        for(let i=tempLines.length; i<listItems.length; i++) {
+            listItems[i].classList.add('visible');
+        }
+    }
+
+    function showOnSiteLabel(u, v, text, type) {
+        const uNode = nodes[u]; const vNode = nodes[v];
+        const midX = (uNode.x + vNode.x) / 2; const midY = (uNode.y + vNode.y) / 2;
+        const label = document.createElement('div');
+        label.className = `onsite-label ${type}`; label.textContent = text;
+        label.style.left = midX + 'px'; label.style.top = midY + 'px';
+        onsiteLayer.appendChild(label);
+        requestAnimationFrame(() => label.classList.add('visible'));
+        setTimeout(() => label.remove(), 1000);
+    }
+
+    // --- Flow Control ---
+    function startRunSetup() {
+        isRunning = true;
+        stopSignal = false;
+        isPaused = false;
+        isFinished = false;
+        document.body.classList.add('running');
+        btnStart.disabled = true;
+        btnReset.disabled = false;
+        btnPause.disabled = false;
+        btnGen.disabled = true;
+        btnRandomStart.disabled = true;
+        document.getElementById('node-count').disabled = true;
+        document.querySelectorAll('.mode-opt').forEach(el => el.style.pointerEvents = 'none');
+        listContainer.innerHTML = '';
+    }
+
+    // --- Logic: Results & Battle Stats ---
+    function finishState(dist, steps, finalElements) {
+        btnPause.disabled = true;
+        btnReset.disabled = true; // Wait for user interaction via hero box
+        document.body.classList.remove('running');
+        isFinished = true;
+
+        // Animate HUD to Center
+        const wrapper = document.getElementById('canvas-wrapper');
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const hudRect = hudPanel.getBoundingClientRect();
+        
+        hudPanel.style.left = (hudRect.left - wrapperRect.left) + 'px';
+        hudPanel.style.top = (hudRect.top - wrapperRect.top) + 'px';
+        hudPanel.style.right = 'auto'; hudPanel.style.transform = 'none';
+        void hudPanel.offsetWidth;
+
+        hudPanel.className = 'hero-mode'; 
+        hudPanel.style.left = ((wrapperRect.width / 2) - 190) + 'px'; // Center 380px width
+        hudPanel.style.top = ((wrapperRect.height * 0.4) - 150) + 'px';
+        hudPanel.style.transform = 'scale(1.1)';
+
+        // Build Content based on Comparison
+        let comparisonHTML = '';
+        
+        // Only show comparison if BOTH have run on THIS map
+        if (battleStats.nn.run && battleStats.se.run) {
+            const nnDist = battleStats.nn.dist;
+            const seDist = battleStats.se.dist;
+            const nnSteps = battleStats.nn.steps;
+            const seSteps = battleStats.se.steps;
+
+            const nnWin = nnDist < seDist;
+            const diff = Math.abs(nnDist - seDist);
+            const diffPct = (diff / Math.max(nnDist, seDist) * 100).toFixed(1);
+            
+            const nnClass = nnWin ? 'comp-winner' : 'comp-loser';
+            const seClass = !nnWin ? 'comp-winner' : 'comp-loser';
+            const winnerText = nnWin ? "NN (Nearest) Wins" : "SE (Greedy) Wins";
+
+            comparisonHTML = `
+                <div class="comparison-box">
+                    <div class="comp-header">⚔️ Algorithm Battle Stats ⚔️</div>
+                    <div class="comp-row">
+                        <span>Metric</span>
+                        <span>NN</span>
+                        <span>SE</span>
+                    </div>
+                    <div class="comp-row" style="border-top:1px solid #444; margin-top:2px; padding-top:2px;">
+                        <span>Dist:</span>
+                        <span class="comp-val ${nnClass}">${nnDist.toFixed(2)}</span>
+                        <span class="comp-val ${seClass}">${seDist.toFixed(2)}</span>
+                    </div>
+                    <div class="comp-row">
+                        <span>Steps:</span>
+                        <span class="comp-val">${nnSteps}</span>
+                        <span class="comp-val">${seSteps}</span>
+                    </div>
+                    <div style="text-align:center; font-size:0.8rem; margin-top:5px; color:#fff;">
+                        ${winnerText} <br> <span style="color:#aaa; font-size:0.7rem;">Efficiency Gap: ${diffPct}%</span>
+                    </div>
+                </div>
+            `;
+        } else {
+             // Encourage user to try the other one
+             const otherMode = CURRENT_MODE === 'NN' ? 'SE' : 'NN';
+             comparisonHTML = `
+                <div class="comparison-box" style="text-align:center; color:#888; font-size:0.8rem;">
+                    Tip: Switch to <b>${otherMode}</b> mode<br>Run again to see performance comparison
+                </div>
+             `;
+        }
+
+        hudPanel.innerHTML = `
+            <div class="hud-hero-title">${CURRENT_MODE === 'NN' ? 'NN Result' : 'SE Result'}</div>
+            <div class="hud-hero-value">${dist.toFixed(2)}</div>
+            <div class="hud-hero-sub">Tour Completed</div>
+            <div class="hud-hero-stats">Total Steps: ${steps}</div>
+            ${comparisonHTML}
+            <div class="hud-hero-action" id="hero-reset">Reset / Switch Mode</div>
+        `;
+        
+        document.getElementById('hero-reset').onclick = (e) => { e.stopPropagation(); resetCalculation(); };
+
+        setTimeout(() => requestAnimationFrame(() => fireConfetti(hudPanel.getBoundingClientRect())), 500);
+
+        finalElements.forEach(l => l.setAttribute("class", "edge final"));
+        if(CURRENT_MODE === 'SE') document.querySelectorAll('.edge-item.accepted').forEach(el => el.classList.add('final'));
+        
+        isRunning = false;
+        btnReset.disabled = false;
+    }
+
+    function resetCalculation() {
+        if (isRunning) { stopSignal = true; updateHUD("--", "--", "STOPPING", "...", "scanning"); return; }
+        performReset();
+    }
+
+    function resetHUDState() {
+        isFinished = false;
+        hudPanel.className = ''; 
+        hudPanel.style.top = '20px'; hudPanel.style.right = '20px'; hudPanel.style.left = 'auto'; hudPanel.style.transform = 'none';
+        hudPanel.style.cursor = 'move';
+        updateHUD();
+    }
+
+    function performReset() {
+        // UI Reset
+        stopSignal = false; isRunning = false; isPaused = false;
+        btnStart.disabled = false; btnReset.disabled = true; btnPause.disabled = true;
+        btnGen.disabled = false; document.getElementById('node-count').disabled = false;
+        btnRandomStart.disabled = false;
+        document.querySelectorAll('.mode-opt').forEach(el => el.style.pointerEvents = 'auto');
+        btnPause.textContent = "Pause"; btnPause.classList.remove("resuming");
+        document.body.classList.remove('running');
+
+        // Visual Reset
+        svg.querySelectorAll('.edge').forEach(e => e.remove());
+        onsiteLayer.innerHTML = '';
+        nodes.forEach(node => {
+            node.circle.setAttribute("class", "node-circle");
+            node.circle.classList.remove('animate-jump');
+        });
+        
+        listContainer.innerHTML = '<div style="padding:20px; text-align:center; color:#666; font-size:0.8rem;">[RESET]<br>Waiting for Start</div>';
+        resetHUDState();
+        
+        if(CURRENT_MODE === 'NN') selectStartNode(startNodeIdx);
+    }
+
+    init();
+</script>
+</body>
+</html>
